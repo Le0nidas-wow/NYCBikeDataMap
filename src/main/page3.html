@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>罗宇杰大帅哥</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+    <style>
+        body,
+        html {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            font-family: "微软雅黑";
+        }
+        #map1_container,
+        #map2_container {
+            float: left;
+            overflow: hidden;
+            width: 50%;
+            height: 100%;
+            margin: 0;
+        }
+        #allmap1 {
+            height: 100%;
+            margin: 0 0 3px;
+        }
+        #allmap2 {
+            height: 100%;
+            margin: 3px 0 0;
+        }
+    </style>
+    <script type="text/javascript" src="https://api.map.baidu.com/api?type=webgl&v=1.0&ak=dm4ysXW6xH8XMNL30LNj7DxuZezCcjCx"></script>
+    <!-- 公共的文件代码 里面包含 地图初始化 和 实用样式 -->
+    <script src="https://mapv.baidu.com/gl/examples/static/common.js"></script>
+    <!-- 使用根据城市名称获取城市的坐标 -->
+    <script src="https://mapv.baidu.com/build/mapv.js"></script>
+    <!--使用mapcgl的时候需要引入-->
+    <script src="https://code.bdstatic.com/npm/mapvgl@1.0.0-beta.131/dist/mapvgl.min.js"></script>
+    <script src="https://code.bdstatic.com/npm/mapvgl@1.0.0-beta.54/dist/mapvgl.min.js"></script>
+    <script src="https://code.bdstatic.com/npm/mapvgl@1.0.0-beta.131/dist/mapvgl.min.js"></script>
+    <script src="https://code.bdstatic.com/npm/mapvgl@1.0.0-beta.131/dist/mapvgl.threelayers.min.js"></script>
+    <script src="https://d3js.org/d3-color.v1.min.js"></script>
+    <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+</head>
+<body>
+<form type=get action="page3.html">
+
+    <input class="Wdate" type="text" name=data1 >
+    <input class="Wdate" type="text" name=data2 >
+    <td colspan=2><input type=submit value="Submit"></td>
+</form>
+<div id="map1_container">
+    <div id="allmap1"></div>
+</div>
+<div id="map2_container">
+    <div id="allmap2"></div>
+</div>
+</body>
+</html>
+<script>
+        function getParams(){
+            var idx = document.URL.indexOf('?');
+            var params = new Array();
+            if (idx != -1) {
+                var pairs = document.URL.substring(idx+1, document.URL.length).split('&');
+                for (var i=0; i<pairs.length; i++){
+                    nameVal = pairs[i].split('=');
+                    params[nameVal[0]] = nameVal[1];
+                }
+            }
+            return params;
+        }
+    params = getParams();
+    data1 = unescape(params["data1"]);
+    data2= unescape(params["data2"]);
+    var myHeaders = new Headers();
+    var myInit = { method: 'GET',
+        headers: myHeaders,
+        mode: 'cors',
+        cache: 'default' };
+    var myRequest1 = new Request('./resources/line/'+data1+'C.csv', myInit);
+    var myRequest2 = new Request('./resources/line/'+data2+'C.csv', myInit);
+    var myRequest3 = new Request('./resources/circle/190302cc.csv', myInit);
+    var myRequest4 = new Request('./resources/circle/190302cc.csv', myInit);
+    var myRequest5 = new Request('./resources/points/'+data1+'.csv', myInit);
+    var myRequest6 = new Request('./resources/points/'+data2+'.csv', myInit);
+    function getColorCPA(weight){
+        var w;
+        var compute;
+        if(weight<=0.2){
+            w=weight*5;
+            compute=d3.interpolate('#6ab92c','#aed606');
+        }
+        else if(weight<=0.4 && weight>0.2){
+            w=(weight-0.2)*5;
+            compute=d3.interpolate('#aed606','#fef804');
+        }
+        else if(weight<=0.6 && weight>0.4){
+            w=(weight-0.4)*5;
+            compute=d3.interpolate('#fef804','#ff7b00');
+        }
+        else if(weight<=0.8 && weight>0.6){
+            w=(weight-0.6)*5;
+            compute=d3.interpolate('#ff7b00','#db253e');
+        }
+        else if(weight>0.8){
+            w=(weight-0.8)*5;
+            compute=d3.interpolate('#db253e','#5b1875');
+        }
+        else{
+            w=1;
+            compute=d3.interpolate('#5b1875','#5b1875');
+        }
+        return compute(w);
+    }
+    // 加载第一张地图
+    var map1 = new BMapGL.Map('allmap1'); // 创建Map实例1
+    var point1 = new BMapGL.Point(-74.1,40.9);
+    map1.centerAndZoom(point1, 10);
+    map1.enableScrollWheelZoom();
+    // 加载第二张地图
+    var map2 = new BMapGL.Map('allmap2'); // 创建Map实例2
+    var point2 = new BMapGL.Point(-74.1,40.9);
+    map2.centerAndZoom(point2, 10);
+    map2.enableScrollWheelZoom();
+    var view1 = new mapvgl.View({
+        //effects: [new mapvgl.BloomEffect()],
+        map: map1
+    });
+    var view2 = new mapvgl.View({
+        //effects: [new mapvgl.BloomEffect()],
+        map: map2
+    });
+    fetch(myRequest1).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var curve1 = new mapvgl.OdCurve();
+        var e1 = [];
+        var s1= [];
+        var s2= [];
+        var e2= [];
+        var p1= [];
+        var p2= [];
+        var dataSet1 = mapv.csv.getDataSet(csvstr);
+        var data1 = dataSet1.get();
+        var datac1 = [];
+        for (i=0;i<data1.length;i++){
+            s1[i] = data1[i].start1;
+            e1[i] = data1[i].end1;
+            s2[i] = data1[i].start2;
+            e2[i] = data1[i].end2;
+            p1[i] = {
+                lng: Number(s1[i]),
+                lat: Number(e1[i])
+            };
+            p2[i] = {
+                lng: Number(s2[i]),
+                lat: Number(e2[i])
+            };
+            curve1.setOptions({
+                points: [p1[i],p2[i]]
+            });
+            var curveModelData1 = curve1.getPoints();
+            datac1.push({
+                geometry:{
+                    type:"LineString",
+                    coordinates: curveModelData1
+                },
+                properties: {
+                    count: data1[i].count,
+                    color: getColorCPA((Number(data1[i].count)-6)/20),
+                    width: (Number(data1[i].count)-6)/20+1,
+                    sa:data1[i].start1,
+                    ea:data1[i].end1,
+                    sb:data1[i].start2,
+                    eb:data1[i].end2,
+                }
+            });
+        }
+        var lineLayer1 = new mapvgl.LineLayer({
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view1.addLayer(lineLayer1);
+        lineLayer1.setData(datac1);
+    });
+    fetch(myRequest2).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var curve1 = new mapvgl.OdCurve();
+        var e1 = [];
+        var s1= [];
+        var s2= [];
+        var e2= [];
+        var p1= [];
+        var p2= [];
+        var dataSet1 = mapv.csv.getDataSet(csvstr);
+        var data1 = dataSet1.get();
+        var datac1 = [];
+        for (i=0;i<data1.length;i++){
+            s1[i] = data1[i].start1;
+            e1[i] = data1[i].end1;
+            s2[i] = data1[i].start2;
+            e2[i] = data1[i].end2;
+            p1[i] = {
+                lng: Number(s1[i]),
+                lat: Number(e1[i])
+            };
+            p2[i] = {
+                lng: Number(s2[i]),
+                lat: Number(e2[i])
+            };
+            curve1.setOptions({
+                points: [p1[i],p2[i]]
+            });
+            var curveModelData1 = curve1.getPoints();
+            datac1.push({
+                geometry:{
+                    type:"LineString",
+                    coordinates: curveModelData1
+                },
+                properties: {
+                    count: data1[i].count,
+                    color: getColorCPA((Number(data1[i].count)-6)/20),
+                    width: (Number(data1[i].count)-6)/20+1,
+                    sa:data1[i].start1,
+                    ea:data1[i].end1,
+                    sb:data1[i].start2,
+                    eb:data1[i].end2,
+                }
+            });
+        }
+        var lineLayer1 = new mapvgl.LineLayer({
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view2.addLayer(lineLayer1);
+        lineLayer1.setData(datac1);
+    });
+    fetch(myRequest3).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var dataRSet1 = mapv.csv.getDataSet(csvstr);
+        var dataR1 = dataRSet1.get();
+        for (var i = 0; i < dataR1.length; i++) {
+            dataR1[i].properties = {
+                count:dataR1[i].count,
+                size:(Number(dataR1[i].count)*2+35),
+            };
+        }
+        var pointLayerR1 = new mapvgl.PointLayer({
+            color:'rgba(180,50,180,0.5)',
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view1.addLayer(pointLayerR1);
+        pointLayerR1.setData(dataR1);
+    });
+    fetch(myRequest4).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var dataRSet1 = mapv.csv.getDataSet(csvstr);
+        var dataR1 = dataRSet1.get();
+        for (var i = 0; i < dataR1.length; i++) {
+            dataR1[i].properties = {
+                count:dataR1[i].count,
+                size:(Number(dataR1[i].count)*2+35),
+            };
+        }
+        var pointLayerR1 = new mapvgl.PointLayer({
+            color:'rgba(180,50,180,0.5)',
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view2.addLayer(pointLayerR1);
+        pointLayerR1.setData(dataR1);
+    });
+    fetch(myRequest5).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var dataPSet1 = mapv.csv.getDataSet(csvstr);
+        var dataP1 = dataPSet1.get();
+        for (var i = 0; i < dataP1.length; i++) {
+            dataP1[i].properties = {
+                start: dataP1[i].start,
+                end: dataP1[i].end,
+            };
+        }
+        var pointLayerP1 = new mapvgl.PointLayer({
+            color: 'rgba(255, 71, 26, 1)',
+            size:10,
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view1.addLayer(pointLayerP1);
+        pointLayerP1.setData(dataP1);
+    });
+    fetch(myRequest6).then(function (rs) {
+        return rs.text();
+    }).then(function (csvstr) {
+        var dataPSet1 = mapv.csv.getDataSet(csvstr);
+        var dataP1 = dataPSet1.get();
+        for (var i = 0; i < dataP1.length; i++) {
+            dataP1[i].properties = {
+                start: dataP1[i].start,
+                end: dataP1[i].end,
+            };
+        }
+        var pointLayerP1 = new mapvgl.PointLayer({
+            color: 'rgba(255, 71, 26, 1)',
+            size:10,
+            enablePicked: true, // 是否可以拾取
+            selectedIndex: -1, // 选中数据项索引
+            selectedColor: '#ff0000', // 选中项颜色
+            autoSelect: true, // 根据鼠标位置来自动设置选中项
+            onClick: (e) => { // 点击事件
+                console.log(e.dataItem);
+            },
+        });
+        view2.addLayer(pointLayerP1);
+        pointLayerP1.setData(dataP1);
+    });
+</script>
+
